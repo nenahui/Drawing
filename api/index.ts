@@ -14,7 +14,6 @@ let drawingData: { x: number; y: number; color: string }[] = [];
 
 router.ws('/ws', (ws: WebSocket) => {
   connectedClients.push(ws);
-
   ws.send(JSON.stringify({ type: 'LOAD', drawingData }));
 
   ws.on('message', (message: string) => {
@@ -27,6 +26,14 @@ router.ws('/ws', (ws: WebSocket) => {
       connectedClients.forEach((client) => {
         if (client !== ws) {
           client.send(JSON.stringify({ type: 'DRAW', pixel }));
+        }
+      });
+    } else if (data.type === 'CLEAR') {
+      drawingData = [];
+
+      connectedClients.forEach((client) => {
+        if (client !== ws) {
+          client.send(JSON.stringify({ type: 'CLEAR' }));
         }
       });
     }
