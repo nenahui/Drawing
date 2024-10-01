@@ -6,18 +6,42 @@ export const Drawing: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useColor('#561ecb');
+  const [webSocket, setWebSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
+    const ws = new WebSocket('ws://192.168.8.185:8000/ws');
+    setWebSocket(ws);
+
+    ws.onmessage = (message) => {
+      const data = JSON.parse(message.data);
+
+      if (data.type === 'LOAD') {
+        data.drawingData.forEach((pixel: { x: number; y: number; color: string }) => {
+          handleDrawPixel(pixel.x, pixel.y, pixel.color);
+        });
+      } else if (data.type === 'DRAW') {
+        const { x, y, color } = data.pixel;
+        handleDrawPixel(x, y, color);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  const handleDrawPixel = (x: number, y: number, color: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const context = canvas.getContext('2d');
     if (context) {
-      context.lineCap = 'round';
-      context.strokeStyle = color.hex;
-      context.lineWidth = 10;
+      context.fillStyle = color;
+      context.beginPath();
+      context.arc(x, y, 10, 0, Math.PI * 2);
+      context.fill();
     }
-  }, [color]);
+  };
 
   const handleStartDrawing = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -31,15 +55,20 @@ export const Drawing: React.FC = () => {
     }
   };
 
-  const draw = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !isDrawing) return;
+  const handleDraw = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !webSocket) return;
 
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.lineTo(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
-      context.stroke();
-    }
+    const x = event.nativeEvent.offsetX;
+    const y = event.nativeEvent.offsetY;
+
+    webSocket.send(
+      JSON.stringify({
+        type: 'DRAW',
+        pixel: { x, y, color: color.hex },
+      })
+    );
+
+    handleDrawPixel(x, y, color.hex);
   };
 
   const handleStopDrawing = () => {
@@ -53,9 +82,9 @@ export const Drawing: React.FC = () => {
         ref={canvasRef}
         width={800}
         height={600}
-        className={'border rounded-xl border-gray-300'}
+        className={'border rounded-xl bg-gray-100 border-gray-300'}
         onMouseDown={handleStartDrawing}
-        onMouseMove={draw}
+        onMouseMove={handleDraw}
         onMouseUp={handleStopDrawing}
         onMouseLeave={handleStopDrawing}
       />
